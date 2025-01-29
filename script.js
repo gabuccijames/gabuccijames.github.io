@@ -5,7 +5,8 @@ document.getElementById("verify-btn").addEventListener("click", async function (
 
     // Get Device Info
     const device = navigator.userAgent || "Unknown Device";
-    console.log("Device Info:", device);
+   // Generate Device Fingerprint
+   const fingerprint = await generateDeviceFingerprint();
 
     // Get IP Address
     let ip;
@@ -22,10 +23,22 @@ document.getElementById("verify-btn").addEventListener("click", async function (
     tg.sendData(
         JSON.stringify({
             telegram_id: userId,
-            device_id: device,
+            device_id: fingerprint,
             ip_address: ip
         })
     );
 
     tg.close();
 });
+
+// Function to Generate Device Fingerprint
+async function generateDeviceFingerprint(deviceInfo) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(deviceInfo);
+
+    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(byte => byte.toString(16).padStart(2, "0")).join("");
+
+    return hashHex;  // A short, unique SHA-256 hash
+}
