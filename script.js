@@ -5,6 +5,7 @@ document.getElementById("verify-btn").addEventListener("click", async function (
 
     // Get Device Info
     const device = navigator.userAgent || "Unknown Device";
+    console.log("Device Info:", device);
 
     // Get IP Address
     let ip;
@@ -12,6 +13,7 @@ document.getElementById("verify-btn").addEventListener("click", async function (
         const res = await fetch("https://api64.ipify.org?format=json");
         const data = await res.json();
         ip = data.ip;
+        console.log("IP Address:", ip);
     } catch (err) {
         ip = "Unknown IP";
     }
