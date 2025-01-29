@@ -4,10 +4,9 @@ document.getElementById("verify-btn").addEventListener("click", async function (
     const userId = userData?.id;
 
     // Get Device Info
-    const device = navigator.userAgent || "Unknown Device";
+    const deviceInfo = navigator.userAgent || "Unknown Device";
    // Generate Device Fingerprint
-   const fingerprint = await generateDeviceFingerprint();
-
+   const fingerprint = await generateDeviceFingerprint(deviceInfo);
     // Get IP Address
     let ip;
     try {
