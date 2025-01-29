@@ -17,11 +17,13 @@ document.getElementById("verify-btn").addEventListener("click", async function (
     }
 
     // Send Data to Bot
-    tg.sendData(JSON.stringify({
-        telegram_id: userId,
-        device_id: device,
-        ip_address: ip
-    }));
+    tg.sendData(
+        JSON.stringify({
+            telegram_id: userId,
+            device_id: device,
+            ip_address: ip
+        })
+    );
 
     tg.close();
 });
