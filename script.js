@@ -3,8 +3,8 @@ document.getElementById("verify-btn").addEventListener("click", async function (
     const userData = tg.initDataUnsafe.user;
     const userId = userData?.id;
 
-    // Generate or retrieve a persistent, unique Device ID
-    const deviceId = await getPersistentDeviceId();
+    // Generate a stronger Device Fingerprint
+    const fingerprint = await generateDeviceFingerprint();
 
     // Get IP Address
     let ip;
@@ -21,7 +21,7 @@ document.getElementById("verify-btn").addEventListener("click", async function (
     tg.sendData(
         JSON.stringify({
             telegram_id: userId,
-            device_id: deviceId,
+            device_id: fingerprint,
             ip_address: ip
         })
     );
@@ -29,42 +29,66 @@ document.getElementById("verify-btn").addEventListener("click", async function (
     tg.close();
 });
 
-// Function to get or generate a persistent, unique Device ID
-async function getPersistentDeviceId() {
+// ✅ Fixed Function to Generate a More Unique Device Fingerprint
+async function generateDeviceFingerprint() {
+    let components = [];
+
+    // 1️⃣ ✅ Fix IndexedDB Unique ID (Wait for it properly)
     try {
         const db = await openIndexedDB();
-        const storedId = await getIndexedDBValue(db, "deviceId");
-
-        if (storedId) {
-            console.log("Using existing Device ID:", storedId);
-            return storedId; // Return the stored ID if it exists
+        const uniqueId = await getIndexedDBValue(db, "deviceId");
+        
+        if (uniqueId) {
+            components.push(uniqueId);
+        } else {
+            const newId = crypto.randomUUID();
+            await setIndexedDBValue(db, "deviceId", newId);
+            components.push(newId);
         }
-
-        // Generate a new unique ID if none exists
-        const baseData = [
-            navigator.userAgent, // Stable browser/OS info
-            navigator.language,  // Language setting
-            screen.width + "x" + screen.height, // Screen resolution
-            new Date().getTimezoneOffset().toString(), // Timezone offset
-            crypto.randomUUID()  // Random UUID for uniqueness
-        ].join("|");
-
-        const newDeviceId = await hashData(baseData);
-        await setIndexedDBValue(db, "deviceId", newDeviceId);
-        console.log("Generated new Device ID:", newDeviceId);
-        return newDeviceId;
     } catch (e) {
-        console.warn("Failed to use IndexedDB, falling back to temporary ID", e);
-        // Fallback: Generate a temporary ID if IndexedDB fails
-        const fallbackData = [
-            navigator.userAgent,
-            crypto.randomUUID()
-        ].join("|");
-        return await hashData(fallbackData);
+        console.warn("IndexedDB not available", e);
     }
+
+    // 2️⃣ Canvas Fingerprinting
+    try {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        ctx.textBaseline = "top";
+        ctx.font = "14px Arial";
+        ctx.fillText(navigator.userAgent, 2, 2);
+        components.push(canvas.toDataURL());
+    } catch (e) {
+        console.warn("Canvas not available", e);
+    }
+
+    // 3️⃣ AudioContext Fingerprinting
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const analyser = audioCtx.createAnalyser();
+        const buffer = new Float32Array(analyser.frequencyBinCount);
+        analyser.getFloatFrequencyData(buffer);
+        components.push(buffer.join(","));
+    } catch (e) {
+        console.warn("AudioContext not available", e);
+    }
+
+    // 4️⃣ WebGL Fingerprinting
+    try {
+        const gl = document.createElement("canvas").getContext("webgl");
+        const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
+        if (debugInfo) {
+            components.push(gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL));
+            components.push(gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL));
+        }
+    } catch (e) {
+        console.warn("WebGL not available", e);
+    }
+
+    // Hash all collected data into a unique fingerprint
+    return hashData(components.join("|"));
 }
 
-// Async Function to Open IndexedDB
+// ✅ Async Function to Open IndexedDB
 function openIndexedDB() {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open("unique_device_db", 1);
@@ -84,7 +108,7 @@ function openIndexedDB() {
     });
 }
 
-// Async Function to Get Value from IndexedDB
+// ✅ Async Function to Get Value from IndexedDB
 function getIndexedDBValue(db, key) {
     return new Promise((resolve, reject) => {
         const transaction = db.transaction("fingerprint", "readonly");
@@ -101,7 +125,7 @@ function getIndexedDBValue(db, key) {
     });
 }
 
-// Async Function to Set Value in IndexedDB
+// ✅ Async Function to Set Value in IndexedDB
 function setIndexedDBValue(db, key, value) {
     return new Promise((resolve, reject) => {
         const transaction = db.transaction("fingerprint", "readwrite");
@@ -118,10 +142,11 @@ function setIndexedDBValue(db, key, value) {
     });
 }
 
-// Function to Hash Data using SHA-256
+// ✅ Function to Hash Data using SHA-256
 async function hashData(data) {
     const encoder = new TextEncoder();
     const encodedData = encoder.encode(data);
+
     const hashBuffer = await crypto.subtle.digest("SHA-256", encodedData);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(byte => byte.toString(16).padStart(2, "0")).join("");
