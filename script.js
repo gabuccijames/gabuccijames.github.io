@@ -40,28 +40,68 @@ async function getPersistentDeviceId() {
             return storedId; // Return the stored ID if it exists
         }
 
-        // Generate a new unique ID if none exists
-        const baseData = [
-            navigator.userAgent, // Stable browser/OS info
-            navigator.language,  // Language setting
-            screen.width + "x" + screen.height, // Screen resolution
-            new Date().getTimezoneOffset().toString(), // Timezone offset
-            crypto.randomUUID()  // Random UUID for uniqueness
-        ].join("|");
-
-        const newDeviceId = await hashData(baseData);
-        await setIndexedDBValue(db, "deviceId", newDeviceId);
-        console.log("Generated new Device ID:", newDeviceId);
-        return newDeviceId;
+        // Generate a new fingerprint-based ID
+        const deviceId = await generateDeviceFingerprint();
+        await setIndexedDBValue(db, "deviceId", deviceId);
+        console.log("Generated new Device ID:", deviceId);
+        return deviceId;
     } catch (e) {
         console.warn("Failed to use IndexedDB, falling back to temporary ID", e);
-        // Fallback: Generate a temporary ID if IndexedDB fails
-        const fallbackData = [
-            navigator.userAgent,
-            crypto.randomUUID()
-        ].join("|");
-        return await hashData(fallbackData);
+        return await generateDeviceFingerprint(); // Fallback to non-persistent ID
     }
+}
+
+// Your WebGL Fingerprint Function
+function getWebGLFingerprint() {
+    const canvas = document.createElement("canvas");
+    const gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+
+    if (!gl) return "No WebGL support";
+
+    const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
+    return debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : "Unknown GPU";
+}
+
+// Your Canvas Fingerprint Function
+function getCanvasFingerprint() {
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+
+    ctx.textBaseline = "top";
+    ctx.font = "14px Arial";
+    ctx.fillText("Hello, fingerprinting!", 10, 10);
+
+    return canvas.toDataURL();
+}
+
+// Modified Fingerprint Generation Function
+async function generateDeviceFingerprint() {
+    const fingerprint = {
+        userAgent: navigator.userAgent,
+        language: navigator.language,
+        screenResolution: `${screen.width}x${screen.height}`,
+        colorDepth: screen.colorDepth,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        platform: navigator.platform,
+        hardwareConcurrency: navigator.hardwareConcurrency || "unknown",
+        deviceMemory: navigator.deviceMemory || "unknown",
+        touchSupport: "ontouchstart" in window || navigator.maxTouchPoints > 0,
+        webGLGPU: getWebGLFingerprint(),
+        canvasHash: getCanvasFingerprint(),
+        uniqueSeed: crypto.randomUUID() // Add randomness for uniqueness across identical devices
+    };
+
+    return await hashFingerprint(fingerprint);
+}
+
+// SHA-256 Hash Function (replacing your simple hash for better uniqueness)
+async function hashFingerprint(fingerprint) {
+    const jsonString = JSON.stringify(fingerprint);
+    const encoder = new TextEncoder();
+    const encodedData = encoder.encode(jsonString);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", encodedData);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(byte => byte.toString(16).padStart(2, "0")).join("");
 }
 
 // Async Function to Open IndexedDB
@@ -116,13 +156,4 @@ function setIndexedDBValue(db, key, value) {
             reject(event.target.error);
         };
     });
-}
-
-// Function to Hash Data using SHA-256
-async function hashData(data) {
-    const encoder = new TextEncoder();
-    const encodedData = encoder.encode(data);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", encodedData);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(byte => byte.toString(16).padStart(2, "0")).join("");
 }
